@@ -15,5 +15,8 @@ USER stepbound
 
 ENV FLASK_APP=wsgi.py
 EXPOSE 8000
-# Migrations first: a new image brings its tables with it.
-CMD ["sh", "-c", "flask db upgrade && exec gunicorn --bind 0.0.0.0:8000 --workers ${WEB_CONCURRENCY:-2} --access-logfile - wsgi:app"]
+# Migrations first, so a new image brings its tables with it: right for a
+# single instance. With several, set MIGRATE_ON_START=0 and run
+# `flask db upgrade` once, as its own step, before rolling them out.
+ENV MIGRATE_ON_START=1
+CMD ["sh", "-c", "if [ \"$MIGRATE_ON_START\" = 1 ]; then flask db upgrade; fi && exec gunicorn --bind 0.0.0.0:8000 --workers ${WEB_CONCURRENCY:-2} --access-logfile - wsgi:app"]

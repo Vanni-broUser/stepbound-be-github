@@ -92,3 +92,18 @@ def test_errors_grouped(ingest, admin):
     assert text.content_type.startswith("text/plain")
     assert admin(f"/v1/errors/{uuid.uuid4()}").status_code == 404
     assert admin("/v1/errors/not-a-uuid").status_code == 404
+
+
+def test_only_wrong_admin_tokens_count_toward_the_limit(app, admin):
+    app.config["ADMIN_FAILED_AUTH_LIMIT"] = "2/minute"
+    try:
+        good = [admin("/v1/stats/events").status_code for _ in range(5)]
+        bad = [admin("/v1/stats/events", token="guess").status_code for _ in range(3)]
+        after = admin("/v1/stats/events").status_code
+    finally:
+        app.config["ADMIN_FAILED_AUTH_LIMIT"] = "1000/minute"
+    assert good == [200] * 5
+    assert bad == [401, 401, 429]
+    # The guesser's address is stopped, the right token too from there:
+    # the admin waits a minute or reads from elsewhere.
+    assert after == 429
