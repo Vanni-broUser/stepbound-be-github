@@ -21,7 +21,16 @@ class Config:
     PLAYER_ID_PEPPER = os.environ.get("PLAYER_ID_PEPPER", "")
     ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "")
 
-    INGEST_RATE_LIMIT = os.environ.get("INGEST_RATE_LIMIT", "60/minute;600/hour")
+    # Per client address. Generous: on mobile networks thousands of phones
+    # can share one address (carrier NAT), and a phone sends only a few
+    # batches an hour.
+    INGEST_RATE_LIMIT = os.environ.get("INGEST_RATE_LIMIT", "300/minute;5000/hour")
+    # Per install id: what one phone may send, whatever its address. A
+    # phone over it gets 429 and keeps its outbox for later.
+    PLAYER_RATE_LIMIT = os.environ.get("PLAYER_RATE_LIMIT", "20/minute;200/hour")
+    # Per client address, counting only wrong admin tokens: someone
+    # guessing is stopped, the admin with the right token never is.
+    ADMIN_FAILED_AUTH_LIMIT = os.environ.get("ADMIN_FAILED_AUTH_LIMIT", "10/minute;50/day")
     RATELIMIT_STORAGE_URI = os.environ.get("RATELIMIT_STORAGE_URI", "memory://")
     RATELIMIT_HEADERS_ENABLED = True
     TRUSTED_PROXIES = _int("TRUSTED_PROXIES", 1)

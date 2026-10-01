@@ -23,6 +23,8 @@ def app():
             "PLAYER_ID_PEPPER": "test-pepper",
             "ADMIN_TOKEN": ADMIN_TOKEN,
             "INGEST_RATE_LIMIT": "1000/minute",
+            "PLAYER_RATE_LIMIT": "1000/minute",
+            "ADMIN_FAILED_AUTH_LIMIT": "1000/minute",
         }
     )
     with app.app_context():
@@ -57,7 +59,7 @@ def ingest(client):
 
 @pytest.fixture
 def admin(client):
-    def get(path):
-        return client.get(path, headers={"Authorization": f"Bearer {ADMIN_TOKEN}"})
+    def get(path, token=ADMIN_TOKEN):
+        return client.get(path, headers={"Authorization": f"Bearer {token}"})
 
     return get

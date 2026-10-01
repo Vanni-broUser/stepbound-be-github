@@ -139,13 +139,26 @@ def test_forget_removes_the_player_and_their_data(client, ingest):
         assert db.session.scalar(select(func.count()).select_from(model)) == 0
 
 
-def test_rate_limit(app, ingest):
+def test_rate_limit_per_address(app, ingest):
     app.config["INGEST_RATE_LIMIT"] = "2/minute"
     try:
-        codes = [ingest({"installId": INSTALL}).status_code for _ in range(3)]
+        codes = [
+            ingest({"installId": f"{n:032x}"}).status_code for n in range(1, 4)
+        ]
     finally:
         app.config["INGEST_RATE_LIMIT"] = "1000/minute"
     assert codes == [200, 200, 429]
+
+
+def test_rate_limit_per_phone_leaves_the_others_alone(app, ingest):
+    app.config["PLAYER_RATE_LIMIT"] = "2/minute"
+    try:
+        codes = [ingest({"installId": INSTALL}).status_code for _ in range(3)]
+        other = ingest({"installId": "f" * 32}).status_code
+    finally:
+        app.config["PLAYER_RATE_LIMIT"] = "1000/minute"
+    assert codes == [200, 200, 429]
+    assert other == 200
 
 
 def test_healthz(client):

@@ -9,14 +9,21 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from flask import Blueprint, abort, jsonify, request
+from flask import Blueprint, abort, current_app, jsonify, request
 from sqlalchemy import Float, cast, distinct, func, select
 
 from .auth import require_admin
-from .extensions import db
+from .extensions import db, limiter
 from .models import ErrorReport, GameEvent, Player
 
 bp = Blueprint("stats", __name__, url_prefix="/v1")
+
+# Only a wrong token counts: whoever guesses is stopped after a few tries,
+# whoever has the token reads as much as they like.
+limiter.limit(
+    lambda: current_app.config["ADMIN_FAILED_AUTH_LIMIT"],
+    deduct_when=lambda response: response.status_code == 401,
+)(bp)
 
 
 def _since() -> datetime:

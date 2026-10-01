@@ -55,7 +55,11 @@ Tutto da variabili d'ambiente, descritte in `.env.example`:
 | `INGEST_KEY` | chiave che l'app manda in `X-Stepbound-Key` (= `STEPBOUND_TELEMETRY_KEY` del gioco); è nell'APK, tiene fuori il traffico a caso |
 | `PLAYER_ID_PEPPER` | segreto per l'HMAC degli id di installazione: nel database non finisce mai l'id che conosce il telefono. Non cambiarlo |
 | `ADMIN_TOKEN` | token Bearer per le statistiche e i rapporti |
-| `INGEST_RATE_LIMIT`, `RATELIMIT_STORAGE_URI` | limite di richieste per indirizzo; con più worker usa `redis://…` |
+| `INGEST_RATE_LIMIT` | richieste per indirizzo IP, largo (300/min, 5000/ora): sulle reti mobili migliaia di telefoni possono condividere un indirizzo |
+| `PLAYER_RATE_LIMIT` | richieste per id di installazione, cioè per telefono (20/min, 200/ora) |
+| `ADMIN_FAILED_AUTH_LIMIT` | token admin sbagliati per indirizzo (10/min, 50/giorno); quelli giusti non contano |
+| `RATELIMIT_STORAGE_URI` | dove stanno i contatori: `memory://` vale per singolo processo; con più worker o istanze usa `redis://…` |
+| `MIGRATE_ON_START` | `1` (default): il container applica le migrazioni all'avvio. Con più istanze metti `0` e lancia `flask db upgrade` una volta prima di avviarle |
 | `TRUSTED_PROXIES` | quanti reverse proxy stanno davanti (per l'indirizzo del client) |
 | `EVENT_RETENTION_DAYS`, `REPORT_RETENTION_DAYS` | conservazione, 395 e 180 giorni come da informativa privacy |
 
@@ -83,7 +87,10 @@ Risponde `200 {"stored": {"events": n, "reports": m, "duplicates": d}}`.
 L'invio è *at-least-once*: un evento o rapporto con un id già visto viene
 ignorato, così un blocco reinviato dopo una risposta persa non si duplica.
 `400` corpo non valido, `401` chiave sbagliata, `413` oltre 1 MB, `429`
-troppe richieste. Limiti: 500 eventi e 5 rapporti per richiesta, 4 KB di
+troppe richieste. Un telefono che riceve `429` non perde nulla: tiene la
+coda e riprova più tardi (dopo 1 minuto, poi 2, fino a 30, o subito al
+ritorno in primo piano), come quando non c'è rete. I limiti sono a
+finestra: passato il minuto o l'ora, le richieste tornano a passare. Limiti: 500 eventi e 5 rapporti per richiesta, 4 KB di
 `data` per evento, 256 KB per rapporto. Un evento con una data fuori da
 [-120 giorni, +1 giorno] (orologio del telefono sbagliato) prende la data
 di arrivo.

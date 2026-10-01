@@ -23,6 +23,22 @@ from .validation import Batch, Invalid, Limits, parse_batch
 bp = Blueprint("ingest", __name__)
 
 
+def _install_id_key() -> str:
+    """The phone a request comes from, for its own rate limit: the install
+    id in the body (a request without one is refused anyway)."""
+    body = request.get_json(silent=True)
+    install_id = body.get("installId") if isinstance(body, dict) else None
+    return f"install:{install_id}" if isinstance(install_id, str) else "install:-"
+
+
+def _limited(view):
+    """Both limits: the address's, generous, and the phone's own."""
+    view = limiter.limit(
+        lambda: current_app.config["PLAYER_RATE_LIMIT"], key_func=_install_id_key
+    )(view)
+    return limiter.limit(lambda: current_app.config["INGEST_RATE_LIMIT"])(view)
+
+
 def _limits() -> Limits:
     config = current_app.config
     return Limits(
@@ -126,7 +142,7 @@ def store(batch: Batch, now: datetime | None = None) -> dict[str, int]:
 
 
 @bp.post("/v1/ingest")
-@limiter.limit(lambda: current_app.config["INGEST_RATE_LIMIT"])
+@_limited
 @require_ingest_key
 def ingest():
     body = request.get_json(silent=True)
@@ -138,7 +154,7 @@ def ingest():
 
 
 @bp.post("/v1/forget")
-@limiter.limit(lambda: current_app.config["INGEST_RATE_LIMIT"])
+@_limited
 @require_ingest_key
 def forget():
     """The player turned sending off: everything stored under their install
