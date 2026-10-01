@@ -1,0 +1,46 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: stepbound_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/stepbound_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -q
+      - name: Migrations match the models
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+          INGEST_KEY: ci
+          PLAYER_ID_PEPPER: ci
+          ADMIN_TOKEN: ci
+          FLASK_APP: wsgi.py
+        run: |
+          python - <<'PY'
+          from sqlalchemy import create_engine, text
+          import os
+          engine = create_engine(os.environ["DATABASE_URL"])
+          with engine.begin() as c:
+              c.execute(text("drop schema public cascade; create schema public"))
+          PY
+          flask db upgrade
+          flask db check
